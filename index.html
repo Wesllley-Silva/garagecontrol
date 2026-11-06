@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10131a">
+  <title>GarageControl — Gestão de Veículos</title>
+
+  <!-- Bibliotecas via CDN: não precisa instalar nada -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0d1117; --surface:#151b24; --surface2:#1b2430; --border:#293444;
+      --text:#e7edf5; --muted:#94a3b8; --primary:#27c995; --primary2:#16a879;
+      --danger:#fb7185; --warning:#fbbf24; --blue:#60a5fa; --radius:16px;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    }
+    * { box-sizing:border-box }
+    body { margin:0; background:radial-gradient(circle at top right,#172637 0,transparent 32%),var(--bg); color:var(--text); min-height:100vh }
+    button,input,select,textarea { font:inherit }
+    button { cursor:pointer }
+    .hidden { display:none!important }
+    .container { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:28px 0 60px }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:26px; flex-wrap:wrap }
+    .brand { display:flex; align-items:center; gap:12px }
+    .brand-mark { width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,var(--primary),#0f8cbb);display:grid;place-items:center;font-size:22px }
+    h1 { font-size:clamp(22px,4vw,30px); margin:0; letter-spacing:-.7px }
+    h2 { font-size:18px; margin:0 0 18px }
+    h3 { font-size:15px; margin:0 0 8px }
+    p { color:var(--muted); line-height:1.55 }
+    .muted { color:var(--muted) }
+    .small { font-size:12px }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+    .between { justify-content:space-between }
+    .grid { display:grid; gap:16px }
+    .stats { grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); margin:18px 0 }
+    .two { grid-template-columns:repeat(2,minmax(0,1fr)) }
+    .card { background:linear-gradient(160deg,rgba(27,36,48,.96),rgba(21,27,36,.96)); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:0 12px 30px #00000018; min-width:0 }
+    .stat-label { color:var(--muted); font-size:13px }
+    .stat-value { font-size:clamp(20px,2.5vw,26px); font-weight:750; margin-top:8px; letter-spacing:-.8px }
+    .stat-foot { color:var(--muted);font-size:12px;margin-top:5px }
+    .toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+    .field { display:flex; flex-direction:column; gap:7px; min-width:0; margin-bottom:13px }
+    label { color:#b7c4d5; font-size:13px }
+    input,select,textarea { width:100%; color:var(--text); background:#0f151e; border:1px solid var(--border); border-radius:10px; padding:11px 12px; outline:none }
+    input:focus,select:focus,textarea:focus { border-color:var(--primary); box-shadow:0 0 0 3px #27c99520 }
+    textarea { resize:vertical; min-height:76px }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px }
+    .span-2 { grid-column:span 2 }
+    .btn { border:1px solid transparent; background:var(--primary); color:#06251b; font-weight:750; border-radius:10px; padding:10px 15px; transition:.18s }
+    .btn:hover { background:#42dfad; transform:translateY(-1px) }
+    .btn.secondary { background:#263344; color:var(--text); border-color:#344357 }
+    .btn.secondary:hover { background:#344357 }
+    .btn.danger { background:#4b202a; color:#fecdd3; border-color:#71313d }
+    .btn.ghost { background:transparent; color:var(--muted); border-color:var(--border) }
+    .btn.small-btn { padding:6px 9px; font-size:12px }
+    .pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:5px 9px; font-size:11px; font-weight:750; background:#24374a; color:#a9d4ff }
+    .pill.good { background:#123b30;color:#75e5bd }
+    .pill.warn { background:#493719;color:#fcd477 }
+    .pill.bad { background:#48232c;color:#ff9eae }
+    .alert-list { display:grid; gap:9px }
+    .alert { border:1px solid var(--border); border-left:3px solid var(--warning); padding:11px 13px; border-radius:10px; background:#171f2a; font-size:13px }
+    .alert.danger { border-left-color:var(--danger) }
+    .table-wrap { overflow-x:auto }
+    table { width:100%; border-collapse:collapse; min-width:620px; font-size:13px }
+    th,td { padding:12px 10px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle }
+    th { color:var(--muted); font-weight:650; white-space:nowrap }
+    td { color:#dbe4ef }
+    .empty { color:var(--muted); text-align:center; padding:25px 8px }
+    .chart-box { height:270px; position:relative }
+    .section-gap { margin-top:18px }
+    .auth-shell { min-height:100vh; display:grid; place-items:center; padding:20px }
+    .auth-card { width:min(430px,100%); padding:28px }
+    .auth-card .brand { margin-bottom:20px }
+    .tabs { display:flex; background:#0f151e; border-radius:10px; padding:4px; margin:15px 0 20px }
+    .tabs button { flex:1; border:0; background:transparent; color:var(--muted); padding:9px; border-radius:8px }
+    .tabs button.active { background:#263344; color:var(--text) }
+    #toast { position:fixed; bottom:20px; right:20px; z-index:90; max-width:min(420px,calc(100% - 40px)); padding:13px 16px; border-radius:12px; background:#1c2b38; border:1px solid #3b5265; box-shadow:0 10px 35px #0008; display:none }
+    #toast.error { border-color:#8d3949 }
+    .loading { opacity:.65; pointer-events:none }
+    footer { text-align:center; color:#64748b; font-size:12px; margin-top:28px }
+
+    /* Estilos do Modal de Edição */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:grid; place-items:center; z-index:80; padding:16px; }
+    .modal-content { width:min(500px, 100%); background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; box-shadow:0 20px 40px #0008; }
+
+    @media(max-width:850px) { .stats{grid-template-columns:repeat(2,minmax(0,1fr))} }
+    @media(max-width:650px) {
+      .container{width:min(100% - 22px,1180px);padding-top:18px}
+      .two{grid-template-columns:1fr}
+      .form-grid{grid-template-columns:1fr}
+      .span-2{grid-column:auto}
+      .card{padding:16px}
+      .topbar{align-items:flex-start}
+      .stats{gap:10px}
+      .stat-value{font-size:22px}
+    }
+  </style>
+</head>
+<body>
+  <!-- Tela de autenticação -->
+  <section id="authView" class="auth-shell">
+    <div class="card auth-card">
+      <div class="brand"><div class="brand-mark">🚘</div><div><h1>GarageControl</h1><div class="muted small">Seu veículo em dia, sempre.</div></div></div>
+      <div class="tabs">
+        <button id="tabLogin" class="active" type="button">Entrar</button>
+        <button id="tabSignup" type="button">Criar conta</button>
+      </div>
+      <form id="authForm">
+        <div class="field"><label for="authEmail">E-mail</label><input id="authEmail" type="email" autocomplete="email" required placeholder="voce@email.com"></div>
+        <div class="field"><label for="authPassword">Senha</label><input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo de 6 caracteres"></div>
+        <button id="authSubmit" class="btn" style="width:100%" type="submit">Entrar</button>
+      </form>
+      <p class="small">Se a confirmação de e-mail estiver habilitada no Supabase, confirme seu endereço antes do primeiro acesso.</p>
+    </div>
+  </section>
+
+  <!-- Aplicação autenticada -->
+  <main id="appView" class="container hidden">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">🚘</div><div><h1>GarageControl</h1><div class="muted small">Painel de gestão e manutenção</div></div></div>
+      <div class="toolbar">
+        <span id="userEmail" class="muted small"></span>
+        <button id="logoutBtn" class="btn secondary" type="button">Sair</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="row between">
+        <div>
+          <h2 style="margin-bottom:5px">Veículo selecionado</h2>
+          <div id="vehicleDetails" class="muted small">Os lançamentos e indicadores abaixo pertencem ao veículo escolhido.</div>
+        </div>
+        <span id="vehicleTypeBadge" class="pill">Nenhum veículo</span>
+      </div>
+      
+      <div class="row" style="margin-top:14px">
+        <div style="flex:1;min-width:190px"><select id="vehicleSelect" aria-label="Selecionar veículo"><option value="">Carregando...</option></select></div>
+        <button id="addVehicleToggle" class="btn" type="button">+ Adicionar veículo</button>
+      </div>
+
+      <!-- Botões de Ação do Veículo Selecionado -->
+      <div id="vehicleActions" class="row hidden" style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+        <button id="editVehicleBtn" class="btn secondary small-btn" type="button">✏️ Editar veículo</button>
+        <button id="deleteVehicleBtn" class="btn danger small-btn" type="button">🗑️ Excluir veículo</button>
+      </div>
+
+      <!-- Formulário de Cadastro/Edição de Veículo -->
+      <form id="vehicleForm" class="form-grid hidden section-gap">
+        <input type="hidden" id="vehicleEditId">
+        <div class="field"><label for="vehicleName">Nome / identificação</label><input id="vehicleName" required maxlength="80" placeholder="Ex.: Honda Civic"></div>
+        <div class="field"><label for="vehicleType">Tipo</label><select id="vehicleType" required><option value="Carro">Carro</option><option value="Moto">Moto</option></select></div>
+        <div class="field"><label for="vehicleKm">Quilometragem atual (km)</label><input id="vehicleKm" type="number" min="0" step="1" required placeholder="Ex.: 45000"></div>
+        <div class="field"><label for="vehiclePlate">Placa (opcional)</label><input id="vehiclePlate" maxlength="10" placeholder="ABC1D23"></div>
+        <div class="span-2 row">
+          <button class="btn" type="submit" id="saveVehicleSubmitBtn">Salvar veículo</button>
+          <button id="cancelVehicle" class="btn ghost" type="button">Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Painel de Estatísticas Expandido -->
+    <section class="grid stats">
+      <article class="card"><div class="stat-label">Meus Veículos</div><div id="statTotalVehicles" class="stat-value">—</div><div class="stat-foot">veículos cadastrados</div></article>
+      <article class="card"><div class="stat-label">Quilometragem atual</div><div id="statKm" class="stat-value">—</div><div class="stat-foot">km registrados no veículo</div></article>
+      <article class="card"><div class="stat-label">Última média de consumo</div><div id="statConsumption" class="stat-value">—</div><div class="stat-foot">km/L · entre abastecimentos</div></article>
+      <article class="card"><div class="stat-label">Combustível no mês</div><div id="statFuel" class="stat-value">—</div><div class="stat-foot">soma dos abastecimentos</div></article>
+      <article class="card"><div class="stat-label">Manutenção no mês</div><div id="statMaintenance" class="stat-value">—</div><div class="stat-foot">serviços registrados</div></article>
+      <article class="card"><div class="stat-label">Gasto Geral Acumulado</div><div id="statTotalCost" class="stat-value">—</div><div class="stat-foot">total investido no veículo</div></article>
+      <article class="card"><div class="stat-label">Custo por Quilômetro</div><div id="statCostPerKm" class="stat-value">—</div><div class="stat-foot">R$/km estimado</div></article>
+    </section>
+
+    <section class="card section-gap">
+      <div class="row between"><div><h2>Alertas e Lembretes de Manutenção</h2><div class="muted small">Avisos de troca de óleo, pneus, filtros, correia e revisões por data e/ou km.</div></div><span id="alertCount" class="pill good">0 alertas</span></div>
+      <div id="alerts" class="alert-list" style="margin-top:12px;"><div class="empty">Selecione um veículo para visualizar os alertas.</div></div>
+    </section>
+
+    <section class="grid two section-gap">
+      <article class="card">
+        <h2>Registrar abastecimento</h2>
+        <form id="fuelForm" class="form-grid">
+          <div class="field"><label for="fuelDate">Data</label><input id="fuelDate" type="date" required></div>
+          <div class="field"><label for="fuelKm">KM atual</label><input id="fuelKm" type="number" min="0" step="1" required></div>
+          <div class="field"><label for="fuelLiters">Litros abastecidos</label><input id="fuelLiters" type="number" min="0.001" step="0.001" required></div>
+          <div class="field"><label for="fuelTotal">Valor total (R$)</label><input id="fuelTotal" type="number" min="0" step="0.01" required></div>
+          <div class="field span-2"><label><input id="fuelFullTank" type="checkbox" checked style="width:auto;margin-right:7px">Abastecimento completou o tanque</label><span class="muted small">A média é calculada pela distância entre dois abastecimentos marcados como tanque cheio, dividida pelos litros do abastecimento atual.</span></div>
+          <div class="span-2"><button class="btn" type="submit">Salvar abastecimento</button></div>
+        </form>
+      </article>
+
+      <article class="card">
+        <h2>Registrar manutenção</h2>
+        <form id="maintenanceForm" class="form-grid">
+          <div class="field"><label for="maintenanceDate">Data</label><input id="maintenanceDate" type="date" required></div>
+          <div class="field"><label for="maintenanceKind">Categoria</label><select id="maintenanceKind"><option value="Preventiva">Preventiva</option><option value="Corretiva">Corretiva</option></select></div>
+          <div class="field"><label for="maintenanceService">Serviço</label><input id="maintenanceService" required maxlength="120" placeholder="Ex.: Troca de óleo, Troca de Pneus, Correia"></div>
+          <div class="field"><label for="maintenanceKm">KM na execução</label><input id="maintenanceKm" type="number" min="0" step="1" required></div>
+          <div class="field"><label for="maintenanceCost">Custo (R$)</label><input id="maintenanceCost" type="number" min="0" step="0.01" required></div>
+          <div class="field"><label for="nextKm">Próxima manutenção em KM</label><input id="nextKm" type="number" min="0" step="1" placeholder="Opcional"></div>
+          <div class="field"><label for="nextDate">Previsão da próxima data</label><input id="nextDate" type="date"></div>
+          <div class="field span-2"><label for="maintenanceNotes">Descrição / peças / observações</label><textarea id="maintenanceNotes" placeholder="Detalhes do serviço..."></textarea></div>
+          <div class="span-2"><button class="btn" type="submit">Salvar manutenção</button></div>
+        </form>
+      </article>
+    </section>
+
+    <section class="grid two section-gap">
+      <article class="card"><h2>Consumo médio (km/L)</h2><div class="chart-box"><canvas id="consumptionChart"></canvas></div></article>
+      <article class="card"><h2>Custos mensais (R$)</h2><div class="chart-box"><canvas id="costChart"></canvas></div></article>
+    </section>
+
+    <!-- Histórico de Abastecimentos com Busca e Filtros -->
+    <section class="card section-gap">
+      <div class="row between" style="margin-bottom:12px;">
+        <h2>Histórico de abastecimentos</h2>
+        <button id="exportFuelCsvBtn" class="btn secondary small-btn" type="button">📊 Exportar Excel/CSV</button>
+      </div>
+      <div class="row" style="margin-bottom:14px;">
+        <input id="fuelSearch" style="flex:1; min-width:180px;" placeholder="Pesquisar histórico..." type="search">
+        <select id="fuelMonthFilter" style="width:auto; min-width:140px;">
+          <option value="">Todos os períodos</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>KM</th><th>Litros</th><th>Total</th><th>Média</th><th>Ações</th></tr></thead>
+          <tbody id="fuelTable"><tr><td colspan="6" class="empty">Selecione um veículo.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Histórico de Manutenções com Busca e Filtros -->
+    <section class="card section-gap">
+      <div class="row between" style="margin-bottom:12px;">
+        <h2>Histórico de manutenções</h2>
+        <button id="exportMaintCsvBtn" class="btn secondary small-btn" type="button">📊 Exportar Excel/CSV</button>
+      </div>
+      <div class="row" style="margin-bottom:14px;">
+        <input id="maintSearch" style="flex:1; min-width:180px;" placeholder="Pesquisar serviço ou notas..." type="search">
+        <select id="maintCategoryFilter" style="width:auto;">
+          <option value="">Todas as categorias</option>
+          <option value="Preventiva">Preventiva</option>
+          <option value="Corretiva">Corretiva</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Serviço</th><th>Categoria</th><th>KM</th><th>Custo</th><th>Próxima previsão</th><th>Ações</th></tr></thead>
+          <tbody id="maintenanceTable"><tr><td colspan="7" class="empty">Selecione um veículo.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>GarageControl · Dados privados por conta · Supabase</footer>
+  </main>
+
+  <!-- Modal para Editar Abastecimento -->
+  <div id="editFuelModal" class="modal-backdrop hidden">
+    <div class="modal-content">
+      <h2>Editar Abastecimento</h2>
+      <form id="editFuelForm" class="form-grid">
+        <input type="hidden" id="editFuelId">
+        <div class="field"><label for="editFuelDate">Data</label><input id="editFuelDate" type="date" required></div>
+        <div class="field"><label for="editFuelKm">KM atual</label><input id="editFuelKm" type="number" min="0" step="1" required></div>
+        <div class="field"><label for="editFuelLiters">Litros</label><input id="editFuelLiters" type="number" min="0.001" step="0.001" required></div>
+        <div class="field"><label for="editFuelTotal">Valor total (R$)</label><input id="editFuelTotal" type="number" min="0" step="0.01" required></div>
+        <div class="field span-2"><label><input id="editFuelFullTank" type="checkbox" style="width:auto;margin-right:7px">Abastecimento completou o tanque</label></div>
+        <div class="span-2 row" style="margin-top:10px;">
+          <button class="btn" type="submit">Salvar alterações</button>
+          <button id="cancelEditFuel" class="btn ghost" type="button">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal para Editar Manutenção -->
+  <div id="editMaintModal" class="modal-backdrop hidden">
+    <div class="modal-content">
+      <h2>Editar Manutenção</h2>
+      <form id="editMaintForm" class="form-grid">
+        <input type="hidden" id="editMaintId">
+        <div class="field"><label for="editMaintDate">Data</label><input id="editMaintDate" type="date" required></div>
+        <div class="field"><label for="editMaintKind">Categoria</label><select id="editMaintKind"><option value="Preventiva">Preventiva</option><option value="Corretiva">Corretiva</option></select></div>
+        <div class="field span-2"><label for="editMaintService">Serviço</label><input id="editMaintService" required maxlength="120"></div>
+        <div class="field"><label for="editMaintKm">KM na execução</label><input id="editMaintKm" type="number" min="0" step="1" required></div>
+        <div class="field"><label for="editMaintCost">Custo (R$)</label><input id="editMaintCost" type="number" min="0" step="0.01" required></div>
+        <div class="field"><label for="editNextKm">Próxima manutenção (KM)</label><input id="editNextKm" type="number" min="0" step="1"></div>
+        <div class="field"><label for="editNextDate">Próxima data</label><input id="editNextDate" type="date"></div>
+        <div class="field span-2"><label for="editMaintNotes">Descrição / Observações</label><textarea id="editMaintNotes"></textarea></div>
+        <div class="span-2 row" style="margin-top:10px;">
+          <button class="btn" type="submit">Salvar alterações</button>
+          <button id="cancelEditMaint" class="btn ghost" type="button">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // CONFIGURAÇÃO SUPABASE
+  const SUPABASE_URL = 'https://hyszumxrjweoiuqkloit.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_B_7DpmX9J5kwrh6GMedrJg_rbqcG17m';
+  const { createClient } = window.supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const $ = (id) => document.getElementById(id);
+  const money = (value) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value)||0);
+  const number = (value, digits=0) => new Intl.NumberFormat('pt-BR',{maximumFractionDigits:digits}).format(Number(value)||0);
+  const dateBR = (value) => value ? new Date(value+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+  const today = () => new Date().toISOString().slice(0,10);
+  const monthKey = (date) => String(date).slice(0,7);
+
+  let authMode = 'login';
+  let currentUser = null;
+  let vehicles = [];
+  let selectedVehicleId = null;
+  let fuels = [];
+  let maintenances = [];
+  let consumptionChart = null;
+  let costChart = null;
+  let toastTimer = null;
+
+  function notify(message, isError=false) {
+    const el = $('toast');
+    el.textContent = message;
+    el.className = isError ? 'error' : '';
+    el.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.style.display='none', 4200);
+  }
+
+  function setBusy(form, busy) {
+    form.classList.toggle('loading',busy);
+    form.querySelectorAll('button').forEach(b=>b.disabled=busy);
+  }
+
+  function escapeHTML(value='') {
+    return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function requireVehicle() {
+    if (!selectedVehicleId) { notify('Cadastre ou selecione um veículo primeiro.',true); return false; }
+    return true;
+  }
+
+  function selectedVehicle() { return vehicles.find(v=>v.id===selectedVehicleId); }
+
+  // AUTENTICAÇÃO
+  $('tabLogin').addEventListener('click',()=>setAuthMode('login'));
+  $('tabSignup').addEventListener('click',()=>setAuthMode('signup'));
+
+  function setAuthMode(mode) {
+    authMode=mode;
+    $('tabLogin').classList.toggle('active',mode==='login');
+    $('tabSignup').classList.toggle('active',mode==='signup');
+    $('authSubmit').textContent=mode==='login'?'Entrar':'Criar conta';
+  }
+
+  $('authForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const form=e.currentTarget; setBusy(form,true);
+    const email=$('authEmail').value.trim();
+    const password=$('authPassword').value;
+    try {
+      const result = authMode==='login'
+        ? await db.auth.signInWithPassword({email,password})
+        : await db.auth.signUp({email,password});
+      if (result.error) throw result.error;
+      if (authMode==='signup' && !result.data.session) {
+        notify('Cadastro criado. Verifique seu e-mail para confirmar a conta.');
+      } else notify(authMode==='login'?'Login realizado.':'Conta criada com sucesso.');
+    } catch(err) { notify(err.message || 'Falha na autenticação.',true); }
+    finally { setBusy(form,false); }
+  });
+
+  $('logoutBtn').addEventListener('click',async()=>{
+    const {error}=await db.auth.signOut();
+    if(error) notify(error.message,true);
+  });
+
+  db.auth.onAuthStateChange((_event,session)=>{
+    setTimeout(()=>renderAuth(session?.user||null),0);
+  });
+
+  function renderAuth(user) {
+    currentUser=user;
+    $('authView').classList.toggle('hidden',!!user);
+    $('appView').classList.toggle('hidden',!user);
+    if(user) {
+      $('userEmail').textContent=user.email||'';
+      loadVehicles();
+    } else {
+      vehicles=[]; selectedVehicleId=null;
+      destroyCharts();
+    }
+  }
+
+  // GERENCIAMENTO DE VEÍCULOS (CADASTRAR, EDITAR, EXCLUIR)
+  $('addVehicleToggle').addEventListener('click', () => {
+    $('vehicleEditId').value = '';
+    $('vehicleForm').reset();
+    $('saveVehicleSubmitBtn').textContent = 'Salvar veículo';
+    $('vehicleForm').classList.toggle('hidden');
+  });
+
+  $('cancelVehicle').addEventListener('click', () => {
+    $('vehicleForm').reset();
+    $('vehicleForm').classList.add('hidden');
+  });
+
+  $('editVehicleBtn').addEventListener('click', () => {
+    const v = selectedVehicle();
+    if (!v) return;
+    $('vehicleEditId').value = v.id;
+    $('vehicleName').value = v.nome;
+    $('vehicleType').value = v.tipo;
+    $('vehicleKm').value = v.km_atual;
+    $('vehiclePlate').value = v.placa || '';
+    $('saveVehicleSubmitBtn').textContent = 'Atualizar veículo';
+    $('vehicleForm').classList.remove('hidden');
+  });
+
+  $('deleteVehicleBtn').addEventListener('click', async () => {
+    const v = selectedVehicle();
+    if (!v) return;
+    const confirmMessage = `Tem certeza que deseja excluir o veículo "${v.nome}"?\n\nEsta ação apagará permanentemente todos os abastecimentos e manutenções associados a ele.`;
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      // Deletar registros filhos antes por segurança
+      await db.from('abastecimentos').delete().eq('veiculo_id', v.id);
+      await db.from('manutencoes').delete().eq('veiculo_id', v.id);
+      const { error } = await db.from('veiculos').delete().eq('id', v.id);
+      if (error) throw error;
+      
+      notify('Veículo e seu histórico foram excluídos com sucesso.');
+      selectedVehicleId = null;
+      await loadVehicles();
+    } catch(err) {
+      notify('Erro ao excluir veículo: ' + err.message, true);
+    }
+  });
+
+  $('vehicleForm').addEventListener('submit', async e => {
+    e.preventDefault(); if(!currentUser) return;
+    const form = e.currentTarget; setBusy(form, true);
+    const editId = $('vehicleEditId').value;
+    const payload = {
+      user_id: currentUser.id,
+      nome: $('vehicleName').value.trim(),
+      tipo: $('vehicleType').value,
+      km_atual: Number($('vehicleKm').value),
+      placa: $('vehiclePlate').value.trim() || null
+    };
+
+    try {
+      if (editId) {
+        const { error } = await db.from('veiculos').update(payload).eq('id', editId);
+        if (error) throw error;
+        notify('Veículo atualizado.');
+        await loadVehicles(editId);
+      } else {
+        const { data, error } = await db.from('veiculos').insert(payload).select().single();
+        if (error) throw error;
+        notify('Veículo cadastrado.');
+        await loadVehicles(data.id);
+      }
+      $('vehicleForm').reset(); 
+      $('vehicleForm').classList.add('hidden');
+    } catch(err) {
+      notify('Não foi possível salvar o veículo: ' + err.message, true);
+    } finally {
+      setBusy(form, false);
+    }
+  });
+
+  $('vehicleSelect').addEventListener('change', async e => {
+    selectedVehicleId = e.target.value || null;
+    await loadVehicleData();
+  });
+
+  async function loadVehicles(preferredId=null) {
+    const {data, error} = await db.from('veiculos').select('*').order('created_at', {ascending: true});
+    if(error){ notify('Erro ao carregar veículos: '+error.message, true); return; }
+    vehicles = data || [];
+    const select = $('vehicleSelect');
+    select.replaceChildren();
+
+    if(!vehicles.length) {
+      select.add(new Option('Cadastre seu primeiro veículo', ''));
+      selectedVehicleId = null;
+      $('vehicleActions').classList.add('hidden');
+    } else {
+      vehicles.forEach(v => select.add(new Option(`${v.nome} (${v.tipo})${v.placa ? ' · ' + v.placa : ''}`, v.id)));
+      selectedVehicleId = preferredId || selectedVehicleId || vehicles[0].id;
+      if(!vehicles.some(v => v.id === selectedVehicleId)) selectedVehicleId = vehicles[0].id;
+      select.value = selectedVehicleId;
+      $('vehicleActions').classList.remove('hidden');
+    }
+    await loadVehicleData();
+  }
+
+  // CARREGAR DADOS DO VEÍCULO SELECIONADO
+  async function loadVehicleData() {
+    const vehicle = selectedVehicle();
+    $('statTotalVehicles').textContent = vehicles.length;
+
+    if(!vehicle) {
+      fuels = []; maintenances = [];
+      $('vehicleTypeBadge').textContent = 'Nenhum veículo';
+      $('vehicleDetails').textContent = 'Selecione ou cadastre um veículo acima.';
+      ['statKm','statConsumption','statFuel','statMaintenance','statTotalCost','statCostPerKm'].forEach(id => $(id).textContent = '—');
+      $('alerts').innerHTML = '<div class="empty">Cadastre um veículo para começar.</div>';
+      $('fuelTable').innerHTML = '<tr><td colspan="6" class="empty">Nenhum veículo selecionado.</td></tr>';
+      $('maintenanceTable').innerHTML = '<tr><td colspan="7" class="empty">Nenhum veículo selecionado.</td></tr>';
+      $('vehicleActions').classList.add('hidden');
+      destroyCharts(); return;
+    }
+
+    $('vehicleActions').classList.remove('hidden');
+    $('vehicleTypeBadge').textContent = vehicle.tipo;
+    $('vehicleTypeBadge').className = 'pill ' + (vehicle.tipo === 'Moto' ? '' : 'good');
+    $('vehicleDetails').textContent = `${vehicle.nome} · ${vehicle.tipo}${vehicle.placa ? ' · Placa: ' + vehicle.placa : ''}`;
+
+    $('fuelKm').value = vehicle.km_atual;
+    $('maintenanceKm').value = vehicle.km_atual;
+
+    const [fuelResult, maintenanceResult] = await Promise.all([
+      db.from('abastecimentos').select('*').eq('veiculo_id', vehicle.id).order('data_abastecimento', {ascending: true}).order('km_atual', {ascending: true}),
+      db.from('manutencoes').select('*').eq('veiculo_id', vehicle.id).order('data_manutencao', {ascending: false})
+    ]);
+
+    if(fuelResult.error || maintenanceResult.error) {
+      notify('Erro ao carregar registros: ' + (fuelResult.error || maintenanceResult.error).message, true); return;
+    }
+
+    fuels = fuelResult.data || [];
+    maintenances = maintenanceResult.data || [];
+    
+    populateMonthFilter();
+    renderDashboard();
+  }
+
+  function calculateConsumption(records) {
+    let previousFull = null;
+    let litersSinceFull = 0;
+    return records.map(record => {
+      let average = null;
+      if(previousFull) litersSinceFull += Number(record.litros);
+      if(record.tanque_cheio) {
+        if(previousFull && Number(record.km_atual) > Number(previousFull.km_atual) && litersSinceFull > 0) {
+          average = (Number(record.km_atual) - Number(previousFull.km_atual)) / litersSinceFull;
+        }
+        previousFull = record;
+        litersSinceFull = 0;
+      }
+      return {...record, media_km_l: average};
+    });
+  }
+
+  // RECÁLCULO AUTOMÁTICO DE KM DO VEÍCULO
+  async function recalculateVehicleKm() {
+    const vehicle = selectedVehicle();
+    if(!vehicle) return;
+
+    let maxKm = 0;
+    fuels.forEach(f => { if(Number(f.km_atual) > maxKm) maxKm = Number(f.km_atual); });
+    maintenances.forEach(m => { if(Number(m.km_realizado) > maxKm) maxKm = Number(m.km_realizado); });
+
+    if(maxKm !== vehicle.km_atual && maxKm > 0) {
+      const { error } = await db.from('veiculos').update({ km_atual: maxKm }).eq('id', vehicle.id);
+      if(!error) vehicle.km_atual = maxKm;
+    }
+  }
+
+  async function saveVehicleKm(km) {
+    const vehicle = selectedVehicle();
+    if(!vehicle || !Number.isFinite(km)) return;
+    if(km > Number(vehicle.km_atual)) {
+      const {error} = await db.from('veiculos').update({km_atual: km}).eq('id', vehicle.id);
+      if(error) throw error;
+      vehicle.km_atual = km;
+    }
+  }
+
+  // REGISTRO E EDIÇÃO DE ABASTECIMENTOS
+  $('fuelDate').value = today();
+  $('fuelForm').addEventListener('submit', async e => {
+    e.preventDefault(); if(!requireVehicle()) return;
+    const form = e.currentTarget; setBusy(form, true);
+    const km = Number($('fuelKm').value);
+    const payload = {
+      user_id: currentUser.id, veiculo_id: selectedVehicleId,
+      data_abastecimento: $('fuelDate').value, km_atual: km,
+      litros: Number($('fuelLiters').value), valor_total: Number($('fuelTotal').value),
+      tanque_cheio: $('fuelFullTank').checked
+    };
+    try {
+      const {error} = await db.from('abastecimentos').insert(payload);
+      if(error) throw error;
+      await saveVehicleKm(km);
+      form.reset(); $('fuelDate').value = today(); $('fuelKm').value = selectedVehicle().km_atual; $('fuelFullTank').checked = true;
+      await loadVehicleData(); notify('Abastecimento registrado.');
+    } catch(err) { notify(err.message, true); }
+    finally { setBusy(form, false); }
+  });
+
+  // EDIÇÃO DE ABASTECIMENTO (MODAL)
+  function openEditFuelModal(record) {
+    $('editFuelId').value = record.id;
+    $('editFuelDate').value = record.data_abastecimento;
+    $('editFuelKm').value = record.km_atual;
+    $('editFuelLiters').value = record.litros;
+    $('editFuelTotal').value = record.valor_total;
+    $('editFuelFullTank').checked = record.tanque_cheio;
+    $('editFuelModal').classList.remove('hidden');
+  }
+
+  $('cancelEditFuel').addEventListener('click', () => $('editFuelModal').classList.add('hidden'));
+
+  $('editFuelForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = $('editFuelId').value;
+    const payload = {
+      data_abastecimento: $('editFuelDate').value,
+      km_atual: Number($('editFuelKm').value),
+      litros: Number($('editFuelLiters').value),
+      valor_total: Number($('editFuelTotal').value),
+      tanque_cheio: $('editFuelFullTank').checked
+    };
+    try {
+      const { error } = await db.from('abastecimentos').update(payload).eq('id', id);
+      if (error) throw error;
+      $('editFuelModal').classList.add('hidden');
+      await loadVehicleData();
+      await recalculateVehicleKm();
+      notify('Abastecimento atualizado!');
+    } catch(err) {
+      notify('Erro ao atualizar: ' + err.message, true);
+    }
+  });
+
+  // REGISTRO E EDIÇÃO DE MANUTENÇÕES
+  $('maintenanceDate').value = today();
+  $('maintenanceForm').addEventListener('submit', async e => {
+    e.preventDefault(); if(!requireVehicle()) return;
+    const form = e.currentTarget; setBusy(form, true);
+    const km = Number($('maintenanceKm').value);
+    const nextKm = $('nextKm').value === '' ? null : Number($('nextKm').value);
+    const payload = {
+      user_id: currentUser.id, veiculo_id: selectedVehicleId,
+      tipo_servico: $('maintenanceService').value.trim(),
+      categoria: $('maintenanceKind').value, km_realizado: km,
+      custo: Number($('maintenanceCost').value), data_manutencao: $('maintenanceDate').value,
+      proxima_troca_km: nextKm, proxima_troca_data: $('nextDate').value || null,
+      descricao: $('maintenanceNotes').value.trim() || null
+    };
+    try {
+      if(nextKm !== null && nextKm < km) throw new Error('A próxima quilometragem deve ser maior ou igual à KM da execução.');
+      const {error} = await db.from('manutencoes').insert(payload);
+      if(error) throw error;
+      await saveVehicleKm(km);
+      form.reset(); $('maintenanceDate').value = today(); $('maintenanceKm').value = selectedVehicle().km_atual;
+      await loadVehicleData(); notify('Manutenção registrada.');
+    } catch(err) { notify(err.message, true); }
+    finally { setBusy(form, false); }
+  });
+
+  // EDIÇÃO DE MANUTENÇÃO (MODAL)
+  function openEditMaintModal(record) {
+    $('editMaintId').value = record.id;
+    $('editMaintDate').value = record.data_manutencao;
+    $('editMaintKind').value = record.categoria;
+    $('editMaintService').value = record.tipo_servico;
+    $('editMaintKm').value = record.km_realizado;
+    $('editMaintCost').value = record.custo;
+    $('editNextKm').value = record.proxima_troca_km || '';
+    $('editNextDate').value = record.proxima_troca_data || '';
+    $('editMaintNotes').value = record.descricao || '';
+    $('editMaintModal').classList.remove('hidden');
+  }
+
+  $('cancelEditMaint').addEventListener('click', () => $('editMaintModal').classList.add('hidden'));
+
+  $('editMaintForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = $('editMaintId').value;
+    const payload = {
+      data_manutencao: $('editMaintDate').value,
+      categoria: $('editMaintKind').value,
+      tipo_servico: $('editMaintService').value.trim(),
+      km_realizado: Number($('editMaintKm').value),
+      custo: Number($('editMaintCost').value),
+      proxima_troca_km: $('editNextKm').value ? Number($('editNextKm').value) : null,
+      proxima_troca_data: $('editNextDate').value || null,
+      descricao: $('editMaintNotes').value.trim() || null
+    };
+    try {
+      const { error } = await db.from('manutencoes').update(payload).eq('id', id);
+      if (error) throw error;
+      $('editMaintModal').classList.add('hidden');
+      await loadVehicleData();
+      await recalculateVehicleKm();
+      notify('Manutenção atualizada!');
+    } catch(err) {
+      notify('Erro ao atualizar: ' + err.message, true);
+    }
+  });
+
+  // DASHBOARD, INDICADORES E HISTÓRICO EXPANDIDO
+  function renderDashboard() {
+    const vehicle = selectedVehicle();
+    const computed = calculateConsumption(fuels);
+    const currentMonth = monthKey(today());
+    
+    const monthFuel = fuels.filter(x => monthKey(x.data_abastecimento) === currentMonth).reduce((s,x) => s + Number(x.valor_total), 0);
+    const monthMaint = maintenances.filter(x => monthKey(x.data_manutencao) === currentMonth).reduce((s,x) => s + Number(x.custo), 0);
+    
+    const totalFuelCost = fuels.reduce((s,x) => s + Number(x.valor_total), 0);
+    const totalMaintCost = maintenances.reduce((s,x) => s + Number(x.custo), 0);
+    const grandTotalCost = totalFuelCost + totalMaintCost;
+
+    let minKm = Number(vehicle.km_atual);
+    fuels.forEach(f => { if(Number(f.km_atual) < minKm) minKm = Number(f.km_atual); });
+    maintenances.forEach(m => { if(Number(m.km_realizado) < minKm) minKm = Number(m.km_realizado); });
+    const kmTraveled = Number(vehicle.km_atual) - minKm;
+    const costPerKm = kmTraveled > 0 ? grandTotalCost / kmTraveled : 0;
+
+    const averages = computed.filter(x => x.media_km_l !== null);
+    const lastAverage = averages.length ? averages[averages.length-1].media_km_l : null;
+
+    $('statKm').textContent = number(vehicle.km_atual) + ' km';
+    $('statConsumption').textContent = lastAverage === null ? '—' : number(lastAverage, 2) + ' km/L';
+    $('statFuel').textContent = money(monthFuel);
+    $('statMaintenance').textContent = money(monthMaint);
+    $('statTotalCost').textContent = money(grandTotalCost);
+    $('statCostPerKm').textContent = kmTraveled > 0 ? money(costPerKm) + '/km' : '—';
+
+    renderFuelTable(computed);
+    renderMaintenanceTable();
+    renderAlerts();
+    renderCharts(computed);
+  }
+
+  // EVENTOS DE BUSCA E FILTROS
+  $('fuelSearch').addEventListener('input', () => renderFuelTable(calculateConsumption(fuels)));
+  $('fuelMonthFilter').addEventListener('change', () => renderFuelTable(calculateConsumption(fuels)));
+  $('maintSearch').addEventListener('input', renderMaintenanceTable);
+  $('maintCategoryFilter').addEventListener('change', renderMaintenanceTable);
+
+  function populateMonthFilter() {
+    const select = $('fuelMonthFilter');
+    select.innerHTML = '<option value="">Todos os períodos</option>';
+    const months = new Set(fuels.map(f => monthKey(f.data_abastecimento)));
+    months.forEach(m => {
+      const [year, month] = m.split('-');
+      select.add(new Option(`${month}/${year}`, m));
+    });
+  }
+
+  function renderFuelTable(records) {
+    const tbody = $('fuelTable'); tbody.replaceChildren();
+    const query = $('fuelSearch').value.toLowerCase();
+    const monthFilter = $('fuelMonthFilter').value;
+
+    let filtered = [...records].reverse();
+
+    if(monthFilter) filtered = filtered.filter(r => monthKey(r.data_abastecimento) === monthFilter);
+    if(query) {
+      filtered = filtered.filter(r => 
+        dateBR(r.data_abastecimento).includes(query) || 
+        String(r.km_atual).includes(query) || 
+        String(r.valor_total).includes(query)
+      );
+    }
+
+    if(!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum abastecimento encontrado.</td></tr>'; return;
+    }
+
+    filtered.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${dateBR(r.data_abastecimento)}</td>
+        <td>${number(r.km_atual)} km</td>
+        <td>${number(r.litros,3)} L</td>
+        <td>${money(r.valor_total)}</td>
+        <td>${r.media_km_l === null ? '—' : number(r.media_km_l, 2) + ' km/L'}</td>
+        <td class="row">
+          <button class="btn secondary small-btn" data-edit-fuel="${r.id}" type="button">Editar</button>
+          <button class="btn danger small-btn" data-delete-fuel="${r.id}" type="button">Excluir</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-edit-fuel]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = records.find(x => x.id === btn.dataset.editFuel);
+        if(item) openEditFuelModal(item);
+      });
+    });
+
+    tbody.querySelectorAll('[data-delete-fuel]').forEach(btn => {
+      btn.addEventListener('click', () => deleteRecord('abastecimentos', btn.dataset.deleteFuel, 'abastecimento'));
+    });
+  }
+
+  function renderMaintenanceTable() {
+    const tbody = $('maintenanceTable'); tbody.replaceChildren();
+    const query = $('maintSearch').value.toLowerCase();
+    const catFilter = $('maintCategoryFilter').value;
+
+    let filtered = [...maintenances];
+
+    if(catFilter) filtered = filtered.filter(r => r.categoria === catFilter);
+    if(query) {
+      filtered = filtered.filter(r => 
+        r.tipo_servico.toLowerCase().includes(query) || 
+        (r.descricao && r.descricao.toLowerCase().includes(query)) ||
+        dateBR(r.data_manutencao).includes(query)
+      );
+    }
+
+    if(!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhuma manutenção encontrada.</td></tr>'; return;
+    }
+
+    filtered.forEach(r => {
+      const next = [r.proxima_troca_km ? number(r.proxima_troca_km) + ' km' : null, r.proxima_troca_data ? dateBR(r.proxima_troca_data) : null].filter(Boolean).join(' / ') || '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${dateBR(r.data_manutencao)}</td>
+        <td><strong>${escapeHTML(r.tipo_servico)}</strong><div class="muted small">${escapeHTML(r.descricao || '')}</div></td>
+        <td><span class="pill ${r.categoria === 'Corretiva' ? 'warn' : 'good'}">${escapeHTML(r.categoria)}</span></td>
+        <td>${number(r.km_realizado)} km</td>
+        <td>${money(r.custo)}</td>
+        <td>${next}</td>
+        <td class="row">
+          <button class="btn secondary small-btn" data-edit-maint="${r.id}" type="button">Editar</button>
+          <button class="btn danger small-btn" data-delete-maint="${r.id}" type="button">Excluir</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-edit-maint]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = maintenances.find(x => x.id === btn.dataset.editMaint);
+        if(item) openEditMaintModal(item);
+      });
+    });
+
+    tbody.querySelectorAll('[data-delete-maint]').forEach(btn => {
+      btn.addEventListener('click', () => deleteRecord('manutencoes', btn.dataset.deleteMaint, 'manutenção'));
+    });
+  }
+
+  function renderAlerts() {
+    const box = $('alerts'); box.replaceChildren();
+    const vehicle = selectedVehicle(); const km = Number(vehicle.km_atual); const now = today();
+    const alerts = [];
+
+    maintenances.forEach(m => {
+      const byKm = m.proxima_troca_km !== null && m.proxima_troca_km !== undefined;
+      const byDate = !!m.proxima_troca_data;
+      if(!byKm && !byDate) return;
+
+      const kmLeft = byKm ? Number(m.proxima_troca_km) - km : null;
+      const daysLeft = byDate ? Math.ceil((new Date(m.proxima_troca_data + 'T00:00:00') - new Date(now + 'T00:00:00')) / 86400000) : null;
+      const overdue = (kmLeft !== null && kmLeft <= 0) || (daysLeft !== null && daysLeft < 0);
+      const soon = (kmLeft !== null && kmLeft <= 500) || (daysLeft !== null && daysLeft <= 30);
+
+      if(overdue || soon) alerts.push({m, overdue, kmLeft, daysLeft});
+    });
+
+    $('alertCount').textContent = alerts.length + ' alerta(s)';
+    $('alertCount').className = 'pill ' + (alerts.some(a => a.overdue) ? 'bad' : alerts.length ? 'warn' : 'good');
+
+    if(!alerts.length) {
+      box.innerHTML = '<div class="alert" style="border-left-color:var(--primary)">✓ Nenhuma manutenção próxima do vencimento.</div>'; return;
+    }
+
+    alerts.sort((a,b) => Number(b.overdue) - Number(a.overdue));
+    alerts.forEach(a => {
+      const details = [];
+      if(a.kmLeft !== null) details.push(a.kmLeft <= 0 ? `vencida há ${number(Math.abs(a.kmLeft))} km` : `faltam ${number(a.kmLeft)} km`);
+      if(a.daysLeft !== null) details.push(a.daysLeft < 0 ? `vencida há ${Math.abs(a.daysLeft)} dia(s)` : a.daysLeft === 0 ? 'prevista para hoje' : `faltam ${a.daysLeft} dia(s)`);
+      const div = document.createElement('div'); div.className = 'alert' + (a.overdue ? ' danger' : '');
+      div.innerHTML = `<strong>${escapeHTML(a.m.tipo_servico)}</strong> — ${a.overdue ? 'Manutenção vencida' : 'Atenção: manutenção próxima'}<div class="muted small">${details.join(' · ')}</div>`;
+      box.appendChild(div);
+    });
+  }
+
+  // EXPORTAÇÃO CSV / EXCEL
+  function exportCSV(filename, rows) {
+    const processRow = row => row.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(';');
+    const csvContent = '\uFEFF' + rows.map(processRow).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  $('exportFuelCsvBtn').addEventListener('click', () => {
+    const v = selectedVehicle(); if(!v) return;
+    const header = ['Data', 'KM Atual', 'Litros', 'Valor Total (R$)'];
+    const rows = fuels.map(f => [f.data_abastecimento, f.km_atual, f.litros, f.valor_total]);
+    exportCSV(`Abastecimentos_${v.nome.replace(/\s+/g, '_')}.csv`, [header, ...rows]);
+  });
+
+  $('exportMaintCsvBtn').addEventListener('click', () => {
+    const v = selectedVehicle(); if(!v) return;
+    const header = ['Data', 'Servico', 'Categoria', 'KM Realizado', 'Custo (R$)', 'Proximo KM', 'Proxima Data', 'Notas'];
+    const rows = maintenances.map(m => [m.data_manutencao, m.tipo_servico, m.categoria, m.km_realizado, m.custo, m.proxima_troca_km || '', m.proxima_troca_data || '', m.descricao || '']);
+    exportCSV(`Manutencoes_${v.nome.replace(/\s+/g, '_')}.csv`, [header, ...rows]);
+  });
+
+  // GRÁFICOS CHART.JS
+  function destroyCharts() {
+    if(consumptionChart){consumptionChart.destroy();consumptionChart=null;}
+    if(costChart){costChart.destroy();costChart=null;}
+  }
+
+  function renderCharts(computed) {
+    if(consumptionChart) consumptionChart.destroy();
+    if(costChart) costChart.destroy();
+
+    const consumptionPoints = computed.filter(x => x.media_km_l !== null);
+    consumptionChart = new Chart($('consumptionChart'), {
+      type: 'line',
+      data: {
+        labels: consumptionPoints.map(x => dateBR(x.data_abastecimento)),
+        datasets: [{label: 'Consumo km/L', data: consumptionPoints.map(x => Number(x.media_km_l.toFixed(2))), borderColor: '#27c995', backgroundColor: '#27c99522', fill: true, tension: .3, pointRadius: 4}]
+      },
+      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {labels: {color: '#cbd5e1'}}}, scales: {x: {ticks: {color: '#94a3b8'}, grid: {color: '#293444'}}, y: {beginAtZero: true, ticks: {color: '#94a3b8'}, grid: {color: '#293444'}}}}
+    });
+
+    const months = [];
+    for(let i=5; i>=0; i--) {
+      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+      months.push(d.toISOString().slice(0,7));
+    }
+    const labels = months.map(m => { const [y, mo] = m.split('-'); return `${mo}/${y.slice(2)}`; });
+    const fuelData = months.map(m => fuels.filter(x => monthKey(x.data_abastecimento) === m).reduce((s,x) => s + Number(x.valor_total), 0));
+    const maintData = months.map(m => maintenances.filter(x => monthKey(x.data_manutencao) === m).reduce((s,x) => s + Number(x.custo), 0));
+
+    costChart = new Chart($('costChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {label: 'Combustível', data: fuelData, backgroundColor: '#60a5fa', borderRadius: 5},
+          {label: 'Manutenção / óleo', data: maintData, backgroundColor: '#27c995', borderRadius: 5}
+        ]
+      },
+      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {labels: {color: '#cbd5e1'}}}, scales: {x: {ticks: {color: '#94a3b8'}, grid: {display: false}}, y: {beginAtZero: true, ticks: {color: '#94a3b8', callback: v => 'R$ ' + v}, grid: {color: '#293444'}}}}
+    });
+  }
+
+  // EXCLUSÃO DE REGISTROS COM RECÁLCULO AUTOMÁTICO DE KM
+  async function deleteRecord(table, id, label) {
+    if(!confirm(`Deseja realmente excluir este ${label}?`)) return;
+    const {error} = await db.from(table).delete().eq('id', id);
+    if(error){ notify('Erro ao excluir: ' + error.message, true); return; }
+    await loadVehicleData();
+    await recalculateVehicleKm();
+    notify('Registro excluído.');
+  }
+
+  // INICIALIZAÇÃO DA SESSÃO
+  if(SUPABASE_URL.includes('SEU-PROJETO') || SUPABASE_ANON_KEY.includes('SUA_CHAVE')) {
+    $('authView').classList.remove('hidden');
+  } else {
+    db.auth.getSession().then(({data, error}) => {
+      if(error) notify(error.message, true);
+      renderAuth(data.session?.user || null);
+    });
+  }
+})();
+</script>
+</body>
+</html>
